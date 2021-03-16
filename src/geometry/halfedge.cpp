@@ -459,6 +459,9 @@ std::optional<std::pair<Halfedge_Mesh::ElementRef, std::string>> Halfedge_Mesh::
 
         do {
             if(h->edge() != e) {
+                printf("h: %d\n", h->id());
+                printf("h->edge: %d\n", h->edge()->id());
+                printf("e: %d\n", e->id());
                 return {{h, "An edge's halfedge does not point to that edge!"}};
             }
             h = h->twin();

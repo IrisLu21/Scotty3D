@@ -56,7 +56,6 @@ std::optional<Halfedge_Mesh::FaceRef> Halfedge_Mesh::erase_edge(Halfedge_Mesh::E
     the new vertex created by the collapse.
 */
 std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Mesh::EdgeRef e) {
-
     (void)e;
 
     HalfedgeRef h0 = e->halfedge();
@@ -67,10 +66,17 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
     VertexRef v1 = twin->vertex();
     FaceRef f1 = twin->face();
 
+    // check boundary
+    if (f0->is_boundary() || f1->is_boundary()) {
+        return std::nullopt;
+    }
+
+    v0->pos = (v0->pos + v1->pos) / 2;
+
     // get neighboring halfedges and edges (get twins -> want to keep outside halfedges and delete inner halfedges)
     HalfedgeRef next0 = h0->next()->twin();
     EdgeRef e1 = next0->edge();
-    HalfedgeRef curr0 = next0;
+    HalfedgeRef curr0 = h0->next();
     HalfedgeRef prev0 = h0;
     do {
         prev0 = curr0;
@@ -81,7 +87,7 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
 
     HalfedgeRef next1 = twin->next()->twin();
     EdgeRef e3 = next1->edge();
-    HalfedgeRef curr1 = next1;
+    HalfedgeRef curr1 = twin->next();
     HalfedgeRef prev1 = twin;
     do {
         prev1 = curr1;
@@ -107,11 +113,11 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
     erase(h0);
     erase(twin);
 
-
     if (fDegree0 <= 3) { // delete f0 and collapse neighboring edges by converging to v0
         erase(next0->twin());
         erase(prev0->twin());
         erase(f0);
+        erase(e2);
 
         next0->vertex() = next0->vertex();
         next0->face() = next0->face();
@@ -125,8 +131,7 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
         prev0->face() = prev0->face();
         prev0->next() = prev0->next();
         prev0->twin() = next0;
-        prev0->edge() = e2;
-        e2->halfedge() = prev0;
+        prev0->edge() = e1;
 
     } else { // do not delete f0, but converge neighboring edges to v0
         next0->vertex() = next0->vertex();
@@ -152,7 +157,7 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
 
         prev0->twin()->vertex() = prev0->twin()->vertex();
         prev0->twin()->face() = f0;
-        prev0->twin()->next() = prev0->twin()->next();
+        prev0->twin()->next() = next0->twin();
         prev0->twin()->twin() = prev0;
         prev0->twin()->edge() = e2;
         prev0->twin()->vertex()->halfedge() = prev0->twin();
@@ -164,6 +169,7 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
         erase(next1->twin());
         erase(prev1->twin());
         erase(f1);
+        erase(e4);
 
         next1->vertex() = next1->vertex();
         next1->face() = next1->face();
@@ -177,8 +183,7 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
         prev1->face() = prev1->face();
         prev1->next() = prev1->next();
         prev1->twin() = next1;
-        prev1->edge() = e4;
-        e4->halfedge() = prev1;
+        prev1->edge() = e3;
 
     } else { // do not delete f1, but converge neighboring edges to v0
         next1->vertex() = next1->vertex();
@@ -204,7 +209,7 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
 
         prev1->twin()->vertex() = prev1->twin()->vertex();
         prev1->twin()->face() = f1;
-        prev1->twin()->next() = prev1->twin()->next();
+        prev1->twin()->next() = next1->twin();
         prev1->twin()->twin() = prev1;
         prev1->twin()->edge() = e4;
         prev1->twin()->vertex()->halfedge() = prev1->twin();
@@ -212,7 +217,7 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
         f1->halfedge() = next1;
     }
 
-    v0->halfedge() = prev0;
+    v0->halfedge() = prev0; 
 
     return v0;
 }
@@ -462,8 +467,6 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::split_edge(Halfedge_Mesh:
     v2->halfedge() = h2;
     v3->halfedge() = h3;
     vNew->halfedge() = hNew1;
-
-    validate();
 
     return vNew;
 }
