@@ -5,6 +5,7 @@
 
 #include "../geometry/halfedge.h"
 #include "debug.h"
+#include <iostream>
 
 /* Note on local operation return types:
 
@@ -57,7 +58,163 @@ std::optional<Halfedge_Mesh::FaceRef> Halfedge_Mesh::erase_edge(Halfedge_Mesh::E
 std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Mesh::EdgeRef e) {
 
     (void)e;
-    return std::nullopt;
+
+    HalfedgeRef h0 = e->halfedge();
+    VertexRef v0 = h0->vertex();
+    FaceRef f0 = h0->face();
+    EdgeRef e0 = h0->edge();
+    HalfedgeRef twin = h0->twin();
+    VertexRef v1 = twin->vertex();
+    FaceRef f1 = twin->face();
+
+    // get neighboring halfedges and edges (get twins -> want to keep outside halfedges and delete inner halfedges)
+    HalfedgeRef next0 = h0->next()->twin();
+    EdgeRef e1 = next0->edge();
+    HalfedgeRef curr0 = next0;
+    HalfedgeRef prev0 = h0;
+    do {
+        prev0 = curr0;
+        curr0 = curr0->next();
+    } while (curr0 != h0);
+    prev0 = prev0->twin();
+    EdgeRef e2 = prev0->edge();
+
+    HalfedgeRef next1 = twin->next()->twin();
+    EdgeRef e3 = next1->edge();
+    HalfedgeRef curr1 = next1;
+    HalfedgeRef prev1 = twin;
+    do {
+        prev1 = curr1;
+        curr1 = curr1->next();
+    } while (curr1 != twin);
+    prev1 = prev1->twin();
+    EdgeRef e4 = prev1->edge();
+
+    // get edge degree of each face
+    unsigned int fDegree0 = f0->degree();
+    unsigned int fDegree1 = f1->degree();
+
+    // loop through all edges from v1 and move them to v0
+    HalfedgeRef start = v1->halfedge();
+    do {
+        start->vertex() = v0;
+        start = start->twin()->next();
+    } while (start != v1->halfedge());
+
+    // erase collapsed edge and one of the vertices
+    erase(e0);
+    erase(v1);
+    erase(h0);
+    erase(twin);
+
+
+    if (fDegree0 <= 3) { // delete f0 and collapse neighboring edges by converging to v0
+        erase(next0->twin());
+        erase(prev0->twin());
+        erase(f0);
+
+        next0->vertex() = next0->vertex();
+        next0->face() = next0->face();
+        next0->next() = next0->next();
+        next0->twin() = prev0;
+        next0->edge() = e1;
+        e1->halfedge() = next0;
+        next0->vertex()->halfedge() = next0;
+
+        prev0->vertex() = v0;
+        prev0->face() = prev0->face();
+        prev0->next() = prev0->next();
+        prev0->twin() = next0;
+        prev0->edge() = e2;
+        e2->halfedge() = prev0;
+
+    } else { // do not delete f0, but converge neighboring edges to v0
+        next0->vertex() = next0->vertex();
+        next0->face() = next0->face();
+        next0->next() = next0->next();
+        next0->twin() = next0->twin();
+        next0->edge() = e1;
+        e1->halfedge() = next0;
+        next0->vertex()->halfedge() = next0;
+
+        next0->twin()->vertex() = v0;
+        next0->twin()->face() = f0;
+        next0->twin()->next() = next0->twin()->next();
+        next0->twin()->twin() = next0;
+        next0->twin()->edge() = e1;
+
+        prev0->vertex() = v0;
+        prev0->face() = prev0->face();
+        prev0->next() = prev0->next();
+        prev0->twin() = prev0->twin();
+        prev0->edge() = e2;
+        e2->halfedge() = prev0;
+
+        prev0->twin()->vertex() = prev0->twin()->vertex();
+        prev0->twin()->face() = f0;
+        prev0->twin()->next() = prev0->twin()->next();
+        prev0->twin()->twin() = prev0;
+        prev0->twin()->edge() = e2;
+        prev0->twin()->vertex()->halfedge() = prev0->twin();
+
+        f0->halfedge() = next0;
+    }
+
+    if (fDegree1 <= 3) { // delete f1 and collapse neighboring edges by converging to v0
+        erase(next1->twin());
+        erase(prev1->twin());
+        erase(f1);
+
+        next1->vertex() = next1->vertex();
+        next1->face() = next1->face();
+        next1->next() = next1->next();
+        next1->twin() = prev1;
+        next1->edge() = e3;
+        e3->halfedge() = next1;
+        next1->vertex()->halfedge() = next1;
+
+        prev1->vertex() = v0;
+        prev1->face() = prev1->face();
+        prev1->next() = prev1->next();
+        prev1->twin() = next1;
+        prev1->edge() = e4;
+        e4->halfedge() = prev1;
+
+    } else { // do not delete f1, but converge neighboring edges to v0
+        next1->vertex() = next1->vertex();
+        next1->face() = next1->face();
+        next1->next() = next1->next();
+        next1->twin() = next1->twin();
+        next1->edge() = e3;
+        e3->halfedge() = next1;
+        next1->vertex()->halfedge() = next1;
+
+        next1->twin()->vertex() = v0;
+        next1->twin()->face() = f1;
+        next1->twin()->next() = next1->twin()->next();
+        next1->twin()->twin() = next1;
+        next1->twin()->edge() = e3;
+
+        prev1->vertex() = v0;
+        prev1->face() = prev1->face();
+        prev1->next() = prev1->next();
+        prev1->twin() = prev1->twin();
+        prev1->edge() = e4;
+        e4->halfedge() = prev1;
+
+        prev1->twin()->vertex() = prev1->twin()->vertex();
+        prev1->twin()->face() = f1;
+        prev1->twin()->next() = prev1->twin()->next();
+        prev1->twin()->twin() = prev1;
+        prev1->twin()->edge() = e4;
+        prev1->twin()->vertex()->halfedge() = prev1->twin();
+
+        f1->halfedge() = next1;
+    }
+
+    v0->halfedge() = prev0;
+
+    return v0;
 }
 
 /*
@@ -75,9 +232,85 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_face(Halfedge_Me
     flipped edge.
 */
 std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::EdgeRef e) {
+    // std::cout << "flip edge" << std::endl;
 
-    (void)e;
-    return std::nullopt;
+    // (void)e;
+    HalfedgeRef h0 = e->halfedge();
+    HalfedgeRef next0 = h0->next();
+    HalfedgeRef twin0 = h0->twin();
+    VertexRef v0 = h0->vertex();
+    FaceRef f0 = h0->face();
+
+    HalfedgeRef next1 = twin0->next();
+    VertexRef v1 = twin0->vertex();
+    FaceRef f1 = twin0->face();
+
+    // check boundary
+    if (f0->is_boundary() || f1->is_boundary()) {
+        return e;
+    }
+
+    VertexRef v2 = next0->twin()->vertex();
+    VertexRef v3 = next1->twin()->vertex();
+
+    // update previous halfedge pointers
+    HalfedgeRef curr0 = next0;
+    HalfedgeRef prev0 = h0;
+    do {
+        prev0 = curr0;
+        curr0 = curr0->next();
+    } while (curr0 != h0);
+    prev0->next() = next1;
+
+    HalfedgeRef curr1 = next1;
+    HalfedgeRef prev1 = twin0;
+    do {
+        prev1 = curr1;
+        curr1 = curr1->next();
+    } while (curr1 != twin0);
+    prev1->next() = next0;
+
+    // update current edge pointers
+    h0->next() = next0->next();
+    h0->vertex() = v3;
+    next0->next() = twin0;
+    next0->face() = f1;
+
+    twin0->next() = next1->next();
+    twin0->vertex() = v2;
+    next1->next() = h0;
+    next1->face() = f0;
+
+    // go around f0 (inside) - assign face and edges
+    f0->halfedge() = h0;
+    HalfedgeRef start0 = h0;
+    do {
+        start0->face() = f0;
+        EdgeRef edge = start0->edge();
+        edge->halfedge() = start0;
+        start0 = start0->next();
+    } while (start0 != h0);
+
+    // go around f1 (inside) - assign face
+    f1->halfedge() = twin0;
+    HalfedgeRef start1 = twin0;
+    do {
+        start1->face() = f1;
+        EdgeRef edge = start1->edge();
+        edge->halfedge() = start1;
+        start1 = start1->next();
+    } while (start1 != twin0);
+
+    // go around outside halfedges - assign face and vertices
+    HalfedgeRef outside = h0->next()->twin();
+    do {
+        outside->face() = outside->face();
+        VertexRef v = outside->vertex();
+        v->halfedge() = outside;
+        outside = outside->next();
+    } while (outside != h0->next()->twin());
+
+    return h0->edge();
 }
 
 /*
@@ -85,10 +318,154 @@ std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::Ed
     newly inserted vertex. The halfedge of this vertex should point along
     the edge that was split, rather than the new edges.
 */
-std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::split_edge(Halfedge_Mesh::EdgeRef e) {
-
+std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::split_edge(Halfedge_Mesh::EdgeRef e) { // a halfedge is next of multiple halfedges???
     (void)e;
-    return std::nullopt;
+
+    // extract current elements
+    HalfedgeRef h0 = e->halfedge();
+    HalfedgeRef twin = h0->twin();
+    HalfedgeRef next0 = h0->next();
+    VertexRef v0 = h0->vertex();
+    FaceRef f0 = h0->face();
+
+    HalfedgeRef next1 = twin->next();
+    VertexRef v1 = twin->vertex();
+    FaceRef f1 = twin->face();
+
+    // check boundary
+    if (f0->is_boundary() || f1->is_boundary()) {
+        return std::nullopt;
+    }
+
+    // check valid split
+    unsigned int deg0 = f0->degree();
+    unsigned int deg1 = f1->degree();
+    if (deg0 != 3 || deg1 != 3) {
+        return std::nullopt;
+    }
+
+    // get neighboring vertices
+    VertexRef v2 = next0->twin()->vertex();
+    VertexRef v3 = next1->twin()->vertex();
+
+    // get neighboring halfedges (will be adjacent to new halfedges)
+    HalfedgeRef h2 = next0->next(); // tail at v2
+    HalfedgeRef h3 = next1->next(); // tail at v3
+
+    // initialize new elements
+    VertexRef vNew = new_vertex();
+    EdgeRef eNew1 = new_edge();
+    EdgeRef eNew2 = new_edge();
+    EdgeRef eNew3 = new_edge();
+    HalfedgeRef hNew1 = new_halfedge();
+    HalfedgeRef hNew2 = new_halfedge();
+    HalfedgeRef hNew3 = new_halfedge();
+    HalfedgeRef hNew4 = new_halfedge();
+    HalfedgeRef hNew5 = new_halfedge();
+    HalfedgeRef hNew6 = new_halfedge();
+    FaceRef f2 = new_face();
+    FaceRef f3 = new_face();
+
+    // set new vertex position
+    vNew->pos = (v0->pos + v1->pos) / 2;
+
+    // connect new elements
+    hNew1->vertex() = vNew;
+    hNew2->vertex() = v1;
+    hNew3->vertex() = vNew;
+    hNew4->vertex() = v3;
+    hNew5->vertex() = vNew;
+    hNew6->vertex() = v2;
+
+    hNew1->twin() = hNew2;
+    hNew2->twin() = hNew1;
+    hNew3->twin() = hNew4;
+    hNew4->twin() = hNew3;
+    hNew5->twin() = hNew6;
+    hNew6->twin() = hNew5;
+
+    hNew1->edge() = eNew1;
+    hNew2->edge() = eNew1;
+    hNew3->edge() = eNew2;
+    hNew4->edge() = eNew2;
+    hNew5->edge() = eNew3;
+    hNew6->edge() = eNew3;
+
+    hNew1->face() = f3;
+    hNew2->face() = f2;
+    hNew3->face() = f2;
+    hNew4->face() = f1;
+    hNew5->face() = f0;
+    hNew6->face() = f3;
+
+    // update and reassign pointers
+    twin->vertex() = vNew;
+
+    h0->next() = hNew5;
+    hNew5->next() = h2;
+    next1->next() = hNew4;
+    hNew4->next() = twin;
+    hNew3->next() = h3;
+    h3->next() = hNew2;
+    hNew2->next() = hNew3;
+    next0->next() = hNew6;
+    hNew6->next() = hNew1;
+    hNew1->next() = next0;
+
+    // pointers that did not change
+    h2->next() = h0;
+    twin->next() = next1;
+
+    // go around f0 (inside) - assign face and edge
+    f0->halfedge() = h0;
+    HalfedgeRef start0 = h0;
+    do {
+        start0->face() = f0;
+        EdgeRef edge = start0->edge();
+        edge->halfedge() = start0;
+        start0 = start0->next();
+    } while (start0 != h0);
+
+    // go around f1 (inside) - assign face and edge
+    f1->halfedge() = twin;
+    HalfedgeRef start1 = twin;
+    do {
+        start1->face() = f1;
+        EdgeRef edge = start1->edge();
+        edge->halfedge() = start1;
+        start1 = start1->next();
+    } while (start1 != twin);
+
+    // go around f2 (inside) - assign face and edge
+    f2->halfedge() = hNew2;
+    HalfedgeRef start2 = hNew2;
+    do {
+        start2->face() = f2;
+        EdgeRef edge = start2->edge();
+        edge->halfedge() = start2;
+        start2 = start2->next();
+    } while (start2 != hNew2);
+
+    // go around f3 (inside) - assign face and edge
+    f3->halfedge() = hNew1;
+    HalfedgeRef start3 = hNew1;
+    do {
+        start3->face() = f3;
+        EdgeRef edge = start3->edge();
+        edge->halfedge() = start3;
+        start3 = start3->next();
+    } while (start3 != hNew1);
+
+    // assign halfedge to each vertex
+    v0->halfedge() = h0;
+    v1->halfedge() = next0;
+    v2->halfedge() = h2;
+    v3->halfedge() = h3;
+    vNew->halfedge() = hNew1;
+
+    validate();
+
+    return vNew;
 }
 
 /* Note on the beveling process:

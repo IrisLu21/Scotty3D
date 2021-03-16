@@ -402,6 +402,8 @@ std::optional<std::pair<Halfedge_Mesh::ElementRef, std::string>> Halfedge_Mesh::
         if(permutation.find(h->next()) == permutation.end()) {
             permutation.insert(h->next());
         } else {
+            printf("h: %d\n", h->id());
+            printf("next: %d\n", h->next()->id());
             return {{h->next(), "A halfedge is the next of multiple halfedges!"}};
         }
     }
@@ -436,6 +438,9 @@ std::optional<std::pair<Halfedge_Mesh::ElementRef, std::string>> Halfedge_Mesh::
 
         do {
             if(h->vertex() != v) {
+                printf("h: %d\n", h->id());
+                printf("h vertex: %d\n", h->vertex()->id());
+                printf("v: %d\n", v->id());
                 return {{h, "A vertex's halfedge does not point to that vertex!"}};
             }
             h = h->twin()->next();

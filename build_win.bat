@@ -20,3 +20,5 @@ if [%1]==[] (cmake --build . --config RelWithDebInfo)
 if not [%1]==[] (cmake --build . --config %1)
 
 popd
+
+pause
