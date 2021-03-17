@@ -371,6 +371,8 @@ std::optional<std::pair<Halfedge_Mesh::ElementRef, std::string>> Halfedge_Mesh::
 
     for(VertexRef v = vertices_begin(); v != vertices_end(); v++) {
         Vec3 p = v->pos;
+        printf("v %d\n", v->id());
+        printf("pos (%f, %f, %f)\n", p.x, p.y, p.z);
         bool finite = std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z);
         if(!finite) return {{v, "A vertex position was set to a non-finite value."}};
     }

@@ -55,7 +55,7 @@ std::optional<Halfedge_Mesh::FaceRef> Halfedge_Mesh::erase_edge(Halfedge_Mesh::E
     This method should collapse the given edge and return an iterator to
     the new vertex created by the collapse.
 */
-std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Mesh::EdgeRef e) {
+std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Mesh::EdgeRef e) { // consider pyramid examples??
     (void)e;
 
     HalfedgeRef h0 = e->halfedge();
@@ -237,9 +237,8 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_face(Halfedge_Me
     flipped edge.
 */
 std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::EdgeRef e) {
-    // std::cout << "flip edge" << std::endl;
 
-    // (void)e;
+    (void)e;
     HalfedgeRef h0 = e->halfedge();
     HalfedgeRef next0 = h0->next();
     HalfedgeRef twin0 = h0->twin();
@@ -286,34 +285,29 @@ std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::Ed
     next1->next() = h0;
     next1->face() = f0;
 
-    // go around f0 (inside) - assign face and edges
+    // go around f0 (inside) - assign face, edge, vertex
     f0->halfedge() = h0;
     HalfedgeRef start0 = h0;
     do {
         start0->face() = f0;
         EdgeRef edge = start0->edge();
         edge->halfedge() = start0;
+        VertexRef v = start0->vertex();
+        v->halfedge() = start0;
         start0 = start0->next();
     } while (start0 != h0);
 
-    // go around f1 (inside) - assign face
+    // go around f1 (inside) - assign face, edge, vertex
     f1->halfedge() = twin0;
     HalfedgeRef start1 = twin0;
     do {
         start1->face() = f1;
         EdgeRef edge = start1->edge();
         edge->halfedge() = start1;
+        VertexRef v = start1->vertex();
+        v->halfedge() = start1;
         start1 = start1->next();
     } while (start1 != twin0);
-
-    // go around outside halfedges - assign face and vertices
-    HalfedgeRef outside = h0->next()->twin();
-    do {
-        outside->face() = outside->face();
-        VertexRef v = outside->vertex();
-        v->halfedge() = outside;
-        outside = outside->next();
-    } while (outside != h0->next()->twin());
 
     return h0->edge();
 }
@@ -323,7 +317,7 @@ std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::Ed
     newly inserted vertex. The halfedge of this vertex should point along
     the edge that was split, rather than the new edges.
 */
-std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::split_edge(Halfedge_Mesh::EdgeRef e) { // a halfedge is next of multiple halfedges???
+std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::split_edge(Halfedge_Mesh::EdgeRef e) {
     (void)e;
 
     // extract current elements
@@ -544,7 +538,121 @@ std::optional<Halfedge_Mesh::FaceRef> Halfedge_Mesh::bevel_face(Halfedge_Mesh::F
     // the same as wherever they "started from."
 
     (void)f;
-    return std::nullopt;
+
+    unsigned int deg = f->degree();
+    // FaceRef insetF = new_face();
+
+    FaceRef currF = f;
+    VertexRef prevV;
+    HalfedgeRef h1prev;
+    HalfedgeRef h2prev;
+    HalfedgeRef h3prev;
+    HalfedgeRef h4prev;
+    EdgeRef e1prev;
+    EdgeRef e2prev;
+    FaceRef prevF;
+    HalfedgeRef prevh0;
+
+    HalfedgeRef h0 = f->halfedge();
+    VertexRef v0 = h0->vertex();
+    VertexRef v = v0;
+
+    for (size_t i = 0; i < deg; i++) {
+
+        // create new elements
+        VertexRef newV = new_vertex();
+        HalfedgeRef hNew1 = new_halfedge();
+        HalfedgeRef hNew2 = new_halfedge();
+        HalfedgeRef hNew3 = new_halfedge();
+        HalfedgeRef hNew4 = new_halfedge();
+        EdgeRef eNew1 = new_edge();
+        EdgeRef eNew2 = new_edge();
+        FaceRef newF = new_face();
+
+        // assign new vertex position to be original position
+        newV->pos = v->pos;
+
+        // adjust h0 face
+        h0->face() = newF;
+
+        // assign hNew1 values
+        hNew1->vertex() = newV;
+        hNew1->edge() = eNew1;
+        hNew1->face() = newF;
+        hNew1->next() = h0;
+        hNew1->twin() = hNew2;
+
+        // assign hNew2 values
+        hNew2->vertex() = v;
+        hNew2->edge() = eNew1;
+        hNew2->next() = hNew3;
+        hNew2->twin() = hNew1;
+
+        // assign hNew3 values
+        hNew3->vertex() = newV;
+        hNew3->edge() = eNew2;
+
+        // assign hNew4 values
+        hNew4->vertex() = newV;
+        hNew4->face() = f;
+
+        // assign halfedge to edge, face, vertex
+        eNew1->halfedge() = hNew1;
+        eNew2->halfedge() = hNew3;
+        newF->halfedge() = hNew1;
+        newV->halfedge() = hNew4;
+        f->halfedge() = hNew4;
+        v->halfedge() = hNew2;
+        
+        if (i != 0) { // if not first iteration , connect halfedges with previous elements
+            
+            hNew2->face() = prevF;
+            
+            hNew3->face() = prevF;
+            hNew3->twin() = h4prev;
+            hNew3->next() = h1prev;
+
+            h4prev->next() = hNew4;
+            h4prev->edge() = eNew2;
+            h4prev->twin() = hNew3;
+
+            prevh0->next() = hNew2;
+        }
+
+        // reset previous positions for next iteration
+        prevV = newV;
+        h1prev = hNew1;
+        h2prev = hNew2;
+        h3prev = hNew3;
+        h4prev = hNew4;
+        e1prev = eNew1;
+        e2prev = eNew2;
+        prevF = newF;
+        prevh0 = h0;
+        
+        h0 = h0->next();
+        v = h0->vertex();
+    }
+    // connect first halfedges with final (previous) elements
+    HalfedgeRef h2 = v0->halfedge();
+    HalfedgeRef h1 = h2->twin();
+    HalfedgeRef h3 = h2->next();
+    VertexRef v1 = h3->vertex();
+    HalfedgeRef h4 = v1->halfedge();
+    EdgeRef edge = h3->edge();
+    FaceRef face = h1->face();
+
+    h2->face() = prevF;
+    h3->face() = prevF;
+    h3->twin() = h4prev;
+    h3->next() = h1prev;
+
+    h4prev->next() = h4;
+    h4prev->edge() = edge;
+    h4prev->twin() = h3;
+    prevh0->next() = h2;
+    
+    return f;
 }
 
 /*
@@ -634,6 +742,8 @@ void Halfedge_Mesh::bevel_face_positions(const std::vector<Vec3>& start_position
                                          Halfedge_Mesh::FaceRef face, float tangent_offset,
                                          float normal_offset) {
 
+    // printf("bevel face positions\n");
+
     if(flip_orientation) normal_offset = -normal_offset;
     std::vector<HalfedgeRef> new_halfedges;
     auto h = face->halfedge();
@@ -641,6 +751,27 @@ void Halfedge_Mesh::bevel_face_positions(const std::vector<Vec3>& start_position
         new_halfedges.push_back(h);
         h = h->next();
     } while(h != face->halfedge());
+
+    size_t n = new_halfedges.size();
+
+    for (size_t i = 0; i < n; i++) {
+
+        size_t prev = (i + n - 1) % n;
+        size_t next = (i + 1) % n;
+
+        Vec3 prevPos = start_positions[prev];
+        Vec3 nextPos = start_positions[next];
+        Vec3 position = start_positions[i];
+
+        VertexRef v = new_halfedges[i]->vertex();
+        
+        Vec3 vect1 = prevPos - position;
+        Vec3 vect2 = nextPos - position;
+        Vec3 tangent = vect1.norm()*vect2 + vect2.norm()*vect1;
+
+        Vec3 newPos = position + (tangent * tangent_offset) - (face->normal() * normal_offset);
+        v->pos = newPos;
+    }
 
     (void)new_halfedges;
     (void)start_positions;
