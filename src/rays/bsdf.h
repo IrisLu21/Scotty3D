@@ -8,7 +8,7 @@
 #include "../util/hdr_image.h"
 
 #include "samplers.h"
-
+ 
 namespace PT {
 
 struct BSDF_Sample {

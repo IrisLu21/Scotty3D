@@ -1,0 +1,51 @@
+**Checkpoint**
+
+edge_flip: 
+    fully implemented
+
+edge_split: 
+    fully implemented
+
+edge_collapse:
+    fully implemented 
+
+bevel_face:
+    fully implemented 
+    (noticed that there are self-intersection between faces when tangents cross but not sure if that is still manifold and how to check for that)
+
+triangulation:
+    fully implemented
+
+linear subdivision:
+    fully implemented
+
+catmull clark subdivision:
+    fully implemented
+
+loop subdivision:
+    fully implemented
+
+model:
+    eagle/penguin/chick??? creature
+    used a cylinder for the main body -> subdivided
+    subdivided cube for head -> moved around vertices and edges to create beak and indents for the eyes
+    subdivided and collapsed cubes for wings
+
+PATHTRACER
+Task 1:
+    fully implemented
+
+Task 2:
+    fully implemented
+
+Task 3:
+    fully implemented
+
+Task 4:
+    I implemented it and am pretty sure that my code is correct in trace_ray, but my rendered objects come out all black since all the shadow rays are hitting an object (this doesn't work for a simple cube wiht a directional light above it). I'm not sure what is wrong and where I can fix this.
+
+Task 5:
+    fully implemented, but unable to be tested due to issue in task 4 (shadow rays)
+
+Task 6 - 8:
+    unimplemented

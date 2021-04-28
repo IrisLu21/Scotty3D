@@ -12,6 +12,10 @@ template<typename Primitive> class BVH {
 public:
     BVH() = default;
     BVH(std::vector<Primitive>&& primitives, size_t max_leaf_size = 1);
+    
+    std::vector<BBox> createBuckets(float min, float max, std::vector<Primitive*>* bucket, float bucket_size, int axis);
+    std::tuple<float, size_t> minPartition(float bucket_size, std::vector<Primitive*>* bucket, std::vector<BBox> boxes);
+
     void build(std::vector<Primitive>&& primitives, size_t max_leaf_size = 1);
 
     BVH(BVH&& src) = default;
@@ -37,6 +41,7 @@ private:
         bool is_leaf() const;
         friend class BVH<Primitive>;
     };
+    Trace hit_node(const Ray& ray, Node node) const;
     size_t new_node(BBox box = {}, size_t start = 0, size_t size = 0, size_t l = 0, size_t r = 0);
 
     std::vector<Node> nodes;

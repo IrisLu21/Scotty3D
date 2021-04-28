@@ -2,8 +2,63 @@
 #include "../rays/bvh.h"
 #include "debug.h"
 #include <stack>
-
+#include <limits>
 namespace PT {
+
+const size_t num_buckets = 10;
+
+template<typename Primitive>
+std::vector<BBox> BVH<Primitive>::createBuckets(float min, float max, std::vector<Primitive*>* bucket, float bucket_size, int axis) {
+    std::vector<BBox> boxes(num_buckets); 
+    for (size_t i = 0; i < primitives.size(); i++) {
+        Primitive &prim = primitives[i];
+        Vec3 center = prim.bbox().center();
+        float point;
+        if (axis == 0) point = center.x;
+        else if (axis == 1) point = center.y;
+        else point = center.z;
+        size_t j = (size_t) std::floor((point - min) / bucket_size);
+        if (j == num_buckets) j = num_buckets - 1;
+        bucket[j].push_back(&prim);
+        boxes[j].enclose(prim.bbox());
+    }
+    return boxes;
+}
+
+template<typename Primitive>
+std::tuple<float, size_t> BVH<Primitive>::minPartition(float bucket_size, std::vector<Primitive*>* bucket, std::vector<BBox> boxes) {
+    float min_cost = std::numeric_limits<float>::max();
+    size_t min_partition = 0;
+    for (size_t i = 0; i < num_buckets; i++) {
+        std::vector<Primitive*> A_prim;
+        BBox A_box;
+        for (size_t j = 0; j < i; j++) {
+            for (size_t k = 0; k < bucket[j].size(); k++) {
+                A_prim.push_back(bucket[j][k]);
+            }
+            A_box.enclose(boxes[j]);
+        }
+        std::vector<Primitive*> B_prim;
+        BBox B_box;
+        for (size_t j = i; j < num_buckets; j++) {
+            for (size_t k = 0; k < bucket[j].size(); k++) {
+                B_prim.push_back(bucket[j][k]);
+            }
+            B_box.enclose(boxes[j]);
+        }
+        float SA = A_box.surface_area();
+        float SB = B_box.surface_area();
+        float SN = SA + SB;
+        size_t NA = A_prim.size();
+        size_t NB = B_prim.size();
+        float cost = (SA / SN) * NA + (SB / SN) * NB;
+        if (cost < min_cost) {
+            min_cost = cost;
+            min_partition = i;
+        }
+    }
+    return std::make_tuple(min_cost, min_partition);
+}
 
 template<typename Primitive>
 void BVH<Primitive>::build(std::vector<Primitive>&& prims, size_t max_leaf_size) {
@@ -31,18 +86,123 @@ void BVH<Primitive>::build(std::vector<Primitive>&& prims, size_t max_leaf_size)
     nodes.clear();
     primitives = std::move(prims);
 
-    // TODO (PathTracer): Task 3
-    // Construct a BVH from the given vector of primitives and maximum leaf
-    // size configuration. The starter code builds a BVH with a
-    // single leaf node (which is also the root) that encloses all the
-    // primitives.
+    // check for leaf
+    if (primitives.size() <= max_leaf_size) {
 
-    // Replace these
-    BBox box;
-    for(const Primitive& prim : primitives) box.enclose(prim.bbox());
+        BBox box;
+        for(const Primitive& prim : primitives) box.enclose(prim.bbox());
 
-    new_node(box, 0, primitives.size(), 0, 0);
-    root_idx = 0;
+        new_node(box, 0, primitives.size(), 0, 0);
+        root_idx = nodes.size() - 1;
+    } else {
+        // generate bounding box for all primitives in prims
+        BBox bbox;
+        for(const Primitive& prim : primitives) bbox.enclose(prim.bbox());
+
+        Vec3 min = bbox.min;
+        Vec3 max = bbox.max;
+        float x_min = min.x;
+        float y_min = min.y;
+        float z_min = min.z;
+        float x_max = max.x;
+        float y_max = max.y;
+        float z_max = max.z;
+
+        // check x axis and place in buckets
+        float x_range = x_max - x_min;
+        float x_bucket_size = x_range / num_buckets;
+        std::vector<Primitive*> x_buckets[num_buckets];
+        std::vector<BBox> x_bbox = createBuckets(x_min, x_max, x_buckets, x_bucket_size, 0);
+        
+        // find x partition w/ lowest cost
+        std::tuple<float, size_t> x_result = minPartition(x_bucket_size, x_buckets, x_bbox);
+        float x_min_cost = std::get<0>(x_result);
+        size_t x_partition = std::get<1>(x_result);
+
+        // check y axis
+        float y_range = y_max - y_min;
+        float y_bucket_size = y_range / num_buckets;
+        std::vector<Primitive*> y_buckets[num_buckets];
+        std::vector<BBox> y_bbox = createBuckets(y_min, y_max, y_buckets, y_bucket_size, 1);
+        
+        // find y partition w/ lowest cost
+        std::tuple<float, size_t> y_result = minPartition(y_bucket_size, y_buckets, y_bbox);
+        float y_min_cost = std::get<0>(y_result);
+        size_t y_partition = std::get<1>(y_result);
+
+        // check z axis
+        float z_range = z_max - z_min;
+        float z_bucket_size = z_range / num_buckets;
+        std::vector<Primitive*> z_buckets[num_buckets];
+        std::vector<BBox> z_bbox = createBuckets(z_min, z_max, z_buckets, z_bucket_size, 2);
+        
+        // find z partition w/ lowest cost
+        std::tuple<float, size_t> z_result = minPartition(z_bucket_size, z_buckets, z_bbox);
+        float z_min_cost = std::get<0>(z_result);
+        size_t z_partition = std::get<1>(z_result);
+
+        std::vector<Primitive*>* bucket;
+        size_t partition;
+        
+        if (x_min_cost <= y_min_cost && x_min_cost <= z_min_cost) { // use x partition
+            bucket = x_buckets;
+            partition = x_partition;
+        } else if (y_min_cost <= x_min_cost && y_min_cost <= z_min_cost) { // use y partition
+            bucket = y_buckets;
+            partition = y_partition;
+        } else { // use z partition
+            bucket = z_buckets;
+            partition = z_partition;
+        }
+
+        std::vector<Primitive> partitionA;
+        std::vector<Primitive> partitionB;
+        for (size_t i = 0; i < partition; i++) {
+            for (size_t j = 0; j < bucket[i].size(); j++) {
+                partitionA.push_back(std::move(*bucket[i][j]));
+            }
+        }
+        for (size_t i = partition; i < num_buckets; i++) {
+            for (size_t j = 0; j < bucket[i].size(); j++) {
+                partitionB.push_back(std::move(*bucket[i][j]));
+            }
+        }
+
+        BVH A(std::move(partitionA), max_leaf_size);
+        BVH B(std::move(partitionB), max_leaf_size);
+        
+        size_t A_prims = A.primitives.size();
+        primitives = std::move(A.primitives);
+        for (size_t i = 0; i < B.primitives.size(); i++) {
+            primitives.push_back(std::move(B.primitives[i]));
+        }
+        nodes = A.nodes;
+        for (size_t i = 0; i < B.nodes.size(); i++) {
+            Node node = B.nodes[i];
+            new_node(node.bbox, node.start+A_prims, node.size, node.l+A.nodes.size(), node.r+A.nodes.size());
+        }
+        new_node(bbox, 0, primitives.size(), A.root_idx, B.root_idx + A.nodes.size()); // root node
+        root_idx = A.nodes.size() + B.nodes.size();
+    }
+}
+
+template<typename Primitive> Trace BVH<Primitive>::hit_node(const Ray& ray, Node node) const {
+    Trace ret;
+    
+    if (node.bbox.hit(ray, ray.dist_bounds)) {
+        if (node.is_leaf()) {
+            for (size_t i = node.start; i < node.start + node.size; i++) {
+                const Primitive &prim = primitives[i];
+                Trace hit = prim.hit(ray);
+                ret = Trace::min(ret, hit);
+            }
+        } else {
+            Trace l_hit = hit_node(ray, nodes[node.l]);
+            Trace r_hit = hit_node(ray, nodes[node.r]);
+            ret = Trace::min(l_hit, r_hit);
+        }
+    } 
+    return ret;
 }
 
 template<typename Primitive> Trace BVH<Primitive>::hit(const Ray& ray) const {
@@ -55,11 +215,13 @@ template<typename Primitive> Trace BVH<Primitive>::hit(const Ray& ray) const {
     // The starter code simply iterates through all the primitives.
     // Again, remember you can use hit() on any Primitive value.
 
-    Trace ret;
-    for(const Primitive& prim : primitives) {
-        Trace hit = prim.hit(ray);
-        ret = Trace::min(ret, hit);
-    }
+    Node root = nodes[nodes.size() - 1];
+    
+    Trace ret = hit_node(ray, root);
+    // for(const Primitive& prim : primitives) {
+    //     Trace hit = prim.hit(ray);
+    //     ret = Trace::min(ret, hit);
+    // }
     return ret;
 }
 
@@ -109,7 +271,6 @@ template<typename Primitive> void BVH<Primitive>::clear() {
 template<typename Primitive>
 size_t BVH<Primitive>::visualize(GL::Lines& lines, GL::Lines& active, size_t level,
                                  const Mat4& trans) const {
-
     std::stack<std::pair<size_t, size_t>> tstack;
     tstack.push({root_idx, 0});
     size_t max_level = 0;
@@ -145,7 +306,7 @@ size_t BVH<Primitive>::visualize(GL::Lines& lines, GL::Lines& active, size_t lev
         edge(Vec3{max.x, min.y, min.z}, Vec3{max.x, max.y, min.z});
         edge(Vec3{max.x, min.y, min.z}, Vec3{max.x, min.y, max.z});
 
-        if(node.l && node.r) {
+        if(node.l && node.r && !node.is_leaf()) {
             tstack.push({node.l, lvl + 1});
             tstack.push({node.r, lvl + 1});
         } else {
